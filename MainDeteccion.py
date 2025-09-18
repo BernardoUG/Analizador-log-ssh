@@ -20,8 +20,6 @@ else:
                 ip_posicion = posicion_palabra.index("from") + 1
                 ip = posicion_palabra[ip_posicion]
                 ip_contador_fallos[ip] = ip_contador_fallos.get(ip, 0) + 1
-        else:
-            print(f"Se encontraron #{contador_fallos}")
 
     print("contador de acceso fallido: ", ip_contador_fallos)
 
@@ -31,3 +29,4 @@ else:
 
 finally:
     print("==== Programa terminado ====")
+
