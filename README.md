@@ -18,3 +18,9 @@ Es una herramienta educativa inspirada en **Fail2Ban**, diseñada para aprender:
    ```bash
    git clone https://github.com/BernardoUG/Analizador-log-ssh.git
    cd Analizador-log-ssh
+
+2. Ejecutar el script en Parrot/Kali: 
+    ```bash
+    python3 MainDeteccion.py 
+    
+    
