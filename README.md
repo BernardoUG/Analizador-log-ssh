@@ -74,7 +74,7 @@ En la terminal verás:
    - La lista de IPs con más de un intento fallido, ordenadas por cantidad
    - Los usuarios a los que intentaron acceder desde cada IP
 
-En el archivo report.txt se guardará un reporte con:
+En el archivo report.txt y report.csv se guardará un reporte con:
    - IP
    - Número total de intentos fallidos
    - Usuarios atacados desde esa IP y su conteo
