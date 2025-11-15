@@ -1,32 +1,119 @@
 import subprocess
 
-try:
-    login = subprocess.check_output(["journalctl", "-u", "ssh", "-n", "200"], text=True)
-    print(login[0:200])
+def extraer_usuario_e_ip(linea: str):
+    
+    # Extrae el usuario y la IP de una línea de journalctl de sshd.
+    
+    partes = linea.split()
+    usuario = None
+    ip = None
 
-except subprocess.CalledProcessError as error:
-    print(f"Command failed with return code {error.returncode}")
+    # IP: suele ir después de la palabra "from"
+    if "from" in partes:
+        idx_from = partes.index("from") + 1
+        if idx_from < len(partes):
+            ip = partes[idx_from]
 
-else:
-    ip_contador_fallos = {}
-    linea = login.splitlines()
-    contador_fallos = 0
+    # Usuario: a partir de "Failed password for ..."
+    try:
+        idx_failed = partes.index("Failed")
+    except ValueError:
+        # Si por algún motivo no está "Failed", salimos
+        return usuario, ip
 
-    for i in linea:
-        if "failed password" in i.lower():
-            contador_fallos += 1
-            posicion_palabra = i.split()
-            if "from" in posicion_palabra:
-                ip_posicion = posicion_palabra.index("from") + 1
-                ip = posicion_palabra[ip_posicion]
-                ip_contador_fallos[ip] = ip_contador_fallos.get(ip, 0) + 1
+    # Patrón 1: "Failed password for invalid user <usuario> from ..."
+    # Patrón 2: "Failed password for <usuario> from ..."
+    if (
+        idx_failed + 5 < len(partes)
+        and partes[idx_failed + 3] == "invalid"
+        and partes[idx_failed + 4] == "user"
+    ):
+        usuario = partes[idx_failed + 5]
+    elif idx_failed + 3 < len(partes):
+        usuario = partes[idx_failed + 3]
 
-    print("contador de acceso fallido: ", ip_contador_fallos)
+    return usuario, ip
 
-    with open("report.txt", "w") as r:
-          for ip, contador in ip_contador_fallos.items():
-            r.write(f"{ip} #{contador} intento de fallos\n")
 
-finally:
-    print("==== Programa terminado ====")
+def main():
+    try:
+        # Tu comando original con journalctl (Debian / systemd)
+        login = subprocess.check_output(
+            ["journalctl", "-u", "ssh", "-n", "200"],
+            text=True
+        )
+        print(login[0:200])  # Vista rápida de los primeros 200 caracteres
 
+    except subprocess.CalledProcessError as error:
+        print(f"Command failed with return code {error.returncode}")
+
+    else:
+        # Diccionario: ip -> {"total": int, "usuarios": {usuario: int}}
+        ip_info = {}
+        contador_fallos = 0
+
+        for linea in login.splitlines():
+            if "failed password" in linea.lower():
+                contador_fallos += 1
+
+                usuario, ip = extraer_usuario_e_ip(linea)
+
+                if ip is None:
+                    continue  # si no se pudo extraer IP, no nos sirve para el conteo
+
+                data_ip = ip_info.setdefault(ip, {"total": 0, "usuarios": {}})
+                data_ip["total"] += 1
+
+                if usuario:
+                    data_ip["usuarios"][usuario] = data_ip["usuarios"].get(usuario, 0) + 1
+
+        print(f"\nTotal de intentos fallidos encontrados: {contador_fallos}")
+
+        # 1 y 2: Filtrar solo IPs con >1 intentos y ordenarlas por número de ataques
+        ataques_ordenados = sorted(
+            (
+                (ip, data)
+                for ip, data in ip_info.items()
+                if data["total"] > 1
+            ),
+            key=lambda x: x[1]["total"],
+            reverse=True
+        )
+
+        if not ataques_ordenados:
+            print("No se encontraron IPs con más de un intento fallido.")
+        else:
+            print(
+                "\n=== IPs con más de un intento fallido "
+                "(ordenadas por número de ataques) ==="
+            )
+            for ip, data in ataques_ordenados:
+                print(f"\nIP: {ip} --> {data['total']} intentos")
+                # 3: Mostrar también usuarios a los que intentaron acceder
+                usuarios_ordenados = sorted(
+                    data["usuarios"].items(),
+                    key=lambda x: x[1],
+                    reverse=True
+                )
+                for usuario, conta in usuarios_ordenados:
+                    print(f"   Usuario '{usuario}': {conta} intentos")
+
+            # Guardar reporte en archivo
+            with open("report.txt", "w") as r:
+                for ip, data in ataques_ordenados:
+                    r.write(f"IP: {ip} - {data['total']} intentos fallidos\n")
+                    usuarios_ordenados = sorted(
+                        data["usuarios"].items(),
+                        key=lambda x: x[1],
+                        reverse=True
+                    )
+                    for usuario, conta in usuarios_ordenados:
+                        r.write(f"   Usuario '{usuario}': {conta} intentos\n")
+                    r.write("\n")
+
+    finally:
+        print("==== Programa terminado ====")
+
+
+if __name__ == "__main__":
+    main()
